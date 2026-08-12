@@ -1,0 +1,38 @@
+name: ci
+
+on:
+  push:
+    branches: [main, cursor/**]
+  pull_request:
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test core workspace
+        run: cargo test --workspace -- --nocapture
+      - name: Init demo fixture + mock run
+        run: |
+          chmod +x scripts/init-demo-fixture.sh
+          ./scripts/init-demo-fixture.sh
+          cargo run -p agent-daemon -- --data-dir /tmp/awb --repo fixtures/demo-project \
+            run-mock --yaml fixtures/demo-project/graph.yaml
+      - name: ACP mock smoke
+        run: cargo run -p agent-daemon -- acp-smoke
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - run: npm ci || npm install
+      - run: npm run build
