@@ -14,3 +14,4 @@ apps/desktop/src-tauri/target/
 fixtures/demo-project/target/
 apps/desktop/node_modules/
 *.tsbuildinfo
+apps/desktop/src-tauri/.gitignore
