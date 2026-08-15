@@ -8,7 +8,7 @@ pub mod normalize;
 pub mod pool;
 pub mod types;
 
-pub use client::AcpClient;
+pub use client::{AcpClient, AcpSpawnOpts, EventSink, SharedDb};
 pub use normalize::{normalize_session_update, NormalizedEvent};
 pub use pool::{ProcessPool, ProcessPoolKey};
 pub use types::*;

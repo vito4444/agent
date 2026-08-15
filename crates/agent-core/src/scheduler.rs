@@ -155,9 +155,21 @@ impl<'a> Scheduler<'a> {
                     return Err(e);
                 }
 
-                // Record produced artifacts if present
-                for art in &spec.produces {
-                    if wt.path.join(&art.path).exists() {
+                // Declared produces are a contract: missing file must fail the producer
+                // before gate/merge. Skipping here made upstream look green while the
+                // edge only blew up downstream — a fake dependency.
+                if !spec.produces.is_empty() {
+                    for art in &spec.produces {
+                        let full = wt.path.join(&art.path);
+                        if !full.exists() {
+                            self.set_status(run_id, &task_id, TaskStatus::Failed)?;
+                            return Err(CoreError::MissingArtifact {
+                                task_id: task_id.clone(),
+                                artifact_id: art.id.clone(),
+                                from_task: task_id.clone(),
+                                path: art.path.clone(),
+                            });
+                        }
                         mgr.record_artifact(run_id, &task_id, art, &wt.path)?;
                     }
                 }
@@ -411,5 +423,72 @@ deps:
         assert_eq!(summary.task_states.get("A").map(|s| s.as_str()), Some("done"));
         assert_eq!(summary.task_states.get("B").map(|s| s.as_str()), Some("done"));
         let _ = demo_two_task_yaml();
+    }
+
+    #[test]
+    fn producer_missing_declared_produce_fails_before_merge() {
+        let tmp = tempdir().unwrap();
+        let repo = tmp.path().join("repo");
+        let wts = tmp.path().join("wts");
+        init_fixture(&repo);
+        let db = Db::open_in_memory().unwrap();
+        let sched = Scheduler::new(&db, repo.clone(), wts);
+        let yaml = r#"
+name: t
+tasks:
+  - id: A
+    title: fix
+    prompt: fix
+    gate_command: "true"
+    produces:
+      - id: fixed_lib
+        path: src/missing_produce.rs
+  - id: B
+    title: test
+    prompt: test
+    produces: []
+deps:
+  - from: A
+    to: B
+    artifacts:
+      - id: fixed_lib
+        path: src/missing_produce.rs
+"#;
+        let (run_id, _) = sched.accept_graph("t", yaml).unwrap();
+        let err = sched
+            .run_until_idle(&run_id, |_r, _t, _path, _p| {
+                // Agent finishes but never writes the declared produce.
+                Ok(())
+            })
+            .unwrap_err();
+        match &err {
+            CoreError::MissingArtifact {
+                task_id,
+                artifact_id,
+                path,
+                ..
+            } => {
+                assert_eq!(task_id, "A");
+                assert_eq!(artifact_id, "fixed_lib");
+                assert_eq!(path, "src/missing_produce.rs");
+                let msg = err.to_string();
+                assert!(msg.contains("src/missing_produce.rs"), "{msg}");
+                assert!(msg.contains("fixed_lib"), "{msg}");
+                assert!(msg.contains('A'), "{msg}");
+            }
+            other => panic!("expected MissingArtifact, got {other}"),
+        }
+        let statuses = sched.all_statuses(&run_id).unwrap();
+        assert_eq!(statuses.get("A").map(|s| s.as_str()), Some("failed"));
+        assert_eq!(statuses.get("B").map(|s| s.as_str()), Some("pending"));
+        // Must not have merged — that would be a fake-green producer.
+        let merges = Journal::new(&db)
+            .find_by_kind(JournalKind::MergeCompleted)
+            .unwrap();
+        assert!(merges.is_empty(), "producer must not merge without produces");
+        let queued = Journal::new(&db)
+            .find_by_kind(JournalKind::MergeQueued)
+            .unwrap();
+        assert!(queued.is_empty());
     }
 }

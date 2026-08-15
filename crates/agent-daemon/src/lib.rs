@@ -3,20 +3,21 @@
 //! a missing OpenCode binary must not prevent opening the workbench.
 
 use agent_acp::normalize::fixture_transcript;
-use agent_acp::{normalize_session_update, AcpClient, NormalizedEvent};
+use agent_acp::{normalize_session_update, AcpClient, AcpSpawnOpts, NormalizedEvent, SharedDb};
 use agent_core::db::Db;
 use agent_core::graph::demo_two_task_yaml;
 use agent_core::journal::Journal;
 use agent_core::memory::MemoryStore;
+use agent_core::permissions::PermissionStore;
 use agent_core::scheduler::Scheduler;
 use agent_core::types::JournalKind;
 use agent_core::worktree::WorktreeManager;
 use anyhow::{Context, Result};
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use parking_lot::Mutex;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct StartupBanner {
@@ -70,7 +71,6 @@ impl Workbench {
             });
         }
 
-        // Orphan scan — failure must not block open.
         match WorktreeManager::new(&db, repo_root.to_path_buf(), worktree_root.clone()) {
             Ok(mgr) => {
                 if let Err(e) = mgr.scan_orphans() {
@@ -108,7 +108,6 @@ impl Workbench {
         );
         let (run_id, _) = sched.accept_graph("demo", yaml)?;
         let summary = sched.run_until_idle(&run_id, |_r, task, path, _prompt| {
-            // Deterministic stand-in for the agent when OpenCode is absent.
             if task == "A" {
                 let lib = path.join("src/lib.rs");
                 if let Some(parent) = lib.parent() {
@@ -169,6 +168,14 @@ impl Workbench {
         MemoryStore::new(&self.db)
     }
 
+    /// Prefix enabled L0 rules into the prompt that will be sent over ACP.
+    /// Without this seam, inject_l0 unit tests can pass while the live prompt
+    /// still omits standing rules.
+    pub fn assemble_prompt(&self, user_prompt: &str) -> Result<String> {
+        let (combined, _) = self.memory().inject_l0_into_prompt(user_prompt)?;
+        Ok(combined)
+    }
+
     pub fn seed_demo_memory(&self) -> Result<Value> {
         let mem = self.memory();
         let rule = mem.add_l0_rule("只读规则：修改代码前必须先写失败测试。")?;
@@ -200,9 +207,17 @@ fn which_opencode() -> Option<PathBuf> {
 /// Shared handle for Tauri managed state.
 pub type SharedWorkbench = Arc<Mutex<Option<Workbench>>>;
 
+/// Production-shaped ACP smoke: mock session + SharedDb journal/permissions.
+/// Remembers `edit` so the mock tool path can complete; events must hit the journal.
 pub async fn run_mock_acp_smoke(cwd: &Path) -> Result<Vec<NormalizedEvent>> {
     let mock = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../fixtures/mock-agent/mock_acp_agent.py");
+    let db_path = cwd.join(".acp-smoke.sqlite");
+    let shared: SharedDb = Arc::new(Mutex::new(Db::open(&db_path)?));
+    {
+        let guard = shared.lock();
+        PermissionStore::new(&guard).remember("edit", true)?;
+    }
     let collected = Arc::new(Mutex::new(Vec::new()));
     let sink_collected = collected.clone();
     let sink: agent_acp::client::EventSink = Arc::new(move |ev| {
@@ -213,15 +228,40 @@ pub async fn run_mock_acp_smoke(cwd: &Path) -> Result<Vec<NormalizedEvent>> {
         &[mock.to_str().unwrap()],
         cwd,
         vec![],
-        Some(sink),
+        AcpSpawnOpts {
+            event_sink: Some(sink),
+            db: Some(shared.clone()),
+        },
     )
     .await?;
     let (sid, _) = client.session_new(cwd).await?;
-    client.prompt(&sid, "fix add").await?;
-    // Give read loop a moment
-    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    // Assemble via MemoryStore so L0 wiring is exercised when rules exist.
+    let prompt = {
+        let guard = shared.lock();
+        let mem = MemoryStore::new(&guard);
+        let (combined, _) = mem.inject_l0_into_prompt("fix add")?;
+        combined
+    };
+    client.prompt(&sid, &prompt).await?;
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
     let _ = client.close_session(&sid).await;
     client.kill().await?;
+
+    // Prove journal, not only the memory sink, received updates.
+    {
+        let guard = shared.lock();
+        let journaled = Journal::new(&guard).list_since(0, 100)?;
+        if !journaled.iter().any(|e| e.kind == "session_update") {
+            anyhow::bail!("acp-smoke: expected session_update in journal");
+        }
+        if !journaled
+            .iter()
+            .any(|e| e.kind == "permission_requested")
+        {
+            anyhow::bail!("acp-smoke: expected permission_requested in journal");
+        }
+    }
+
     let events = collected.lock().clone();
     Ok(events)
 }

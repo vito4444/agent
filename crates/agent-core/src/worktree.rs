@@ -183,6 +183,7 @@ impl<'a> WorktreeManager<'a> {
                     task_id: task_id.to_string(),
                     artifact_id: art.id.clone(),
                     from_task: from_task.clone(),
+                    path: art.path.clone(),
                 });
                 let (src_rel, _sha) = row?;
                 // Prefer artifact path recorded relative to upstream worktree; look up upstream path.
@@ -194,6 +195,7 @@ impl<'a> WorktreeManager<'a> {
                     task_id: task_id.to_string(),
                     artifact_id: art.id.clone(),
                     from_task: from_task.clone(),
+                    path: art.path.clone(),
                 })?;
                 let src = PathBuf::from(&upstream_path).join(&src_rel);
                 if !src.exists() {
@@ -206,6 +208,7 @@ impl<'a> WorktreeManager<'a> {
                             task_id: task_id.to_string(),
                             artifact_id: art.id.clone(),
                             from_task: from_task.clone(),
+                            path: art.path.clone(),
                         });
                     }
                 } else {
@@ -246,6 +249,7 @@ impl<'a> WorktreeManager<'a> {
                 task_id: task_id.to_string(),
                 artifact_id: artifact.id.clone(),
                 from_task: task_id.to_string(),
+                path: artifact.path.clone(),
             });
         }
         assert_contained(worktree, &full)?;
@@ -494,9 +498,16 @@ mod tests {
                 )],
             )
             .unwrap_err();
-        match err {
-            CoreError::MissingArtifact { artifact_id, .. } => {
-                assert_eq!(artifact_id, "fixed_lib")
+        match &err {
+            CoreError::MissingArtifact {
+                artifact_id, path, ..
+            } => {
+                assert_eq!(artifact_id, "fixed_lib");
+                assert_eq!(path, "src/lib.rs");
+                assert!(
+                    err.to_string().contains("src/lib.rs"),
+                    "Display must name path: {err}"
+                );
             }
             other => panic!("expected MissingArtifact, got {other}"),
         }

@@ -12,6 +12,7 @@ pub mod journal;
 pub mod memory;
 pub mod merge;
 pub mod pathutil;
+pub mod permissions;
 pub mod schema;
 pub mod scheduler;
 pub mod types;

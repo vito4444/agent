@@ -16,6 +16,7 @@ async-trait.workspace = true
 uuid.workspace = true
 agent-core.workspace = true
 chrono.workspace = true
+parking_lot.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

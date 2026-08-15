@@ -19,11 +19,17 @@ pub enum CoreError {
     #[error("path escape: {path} is outside root {root}")]
     PathEscape { path: String, root: String },
 
-    #[error("missing artifact: task `{task_id}` requires `{artifact_id}` from `{from_task}` but it was not recorded")]
+    /// Producer or consumer missing a declared artifact.
+    /// `path` must appear in Display so operators know which file was expected —
+    /// without it, fake-green edges are undiagnosable.
+    #[error(
+        "missing artifact: task `{task_id}` artifact `{artifact_id}` path `{path}` (from `{from_task}`)"
+    )]
     MissingArtifact {
         task_id: String,
         artifact_id: String,
         from_task: String,
+        path: String,
     },
 
     #[error("gate failed: task `{task_id}` command `{command}` exited {exit_code}")]
