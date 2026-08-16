@@ -32,6 +32,8 @@
 
 等权总分（见第 6 节）AionUi 略高，是因为「办公 Cowork」和「上手」两维把它拉上去了。若你的真实需求是编码编排，应看场景加权，不要看等权总分。
 
+同类型不止这四家。第 8 节列了 ADE / 远程 / TUI / 看板 / Cowork / 单引擎 六类备选，以及目录站常混进来、其实不是同层的项目。
+
 ## 2. 事实卡（截至 2026-08-16，GitHub API）
 
 | 项 | Orca | Paseo | Codeg | AionUi |
@@ -300,14 +302,105 @@ Orca 的「协作」更像比赛；Codeg / AionUi 的「协作」更像分工。
 
 Codeg 在三角形内部：三边都不占顶点，但没有明显短板。适合「我只要一个能自托管的统一工作区，桌面和服务器都能跑」。
 
-## 8. 不该信的说法
+## 8. 同类型平台图谱（2026-08-16）
+
+同类型 = **坐在已有 CLI 编码 Agent 上面的控制面 / ADE / Cowork 工作台**。不是 Cursor，不是 Claude Code / Codex 本身，也不是 CrewAI / Dify 那种「自己造 Agent 运行时」。
+
+目录站 [openorchestrators.org](https://openorchestrators.org/) 会把 OpenClaw、Hermes、CrewAI、Dify 和 Orca 列在同一页。那些是相邻生态，不是本报告的同层。下面只收「你已经有 Claude Code / Codex / OpenCode，再找一个壳来管它们」的产品。
+
+Stars 与许可来自当日 GitHub API；闭源产品无 star。贴近度 5 = 可当四家的直接备选，1 = 只沾一条边。
+
+### 8.1 桌面 ADE / worktree 指挥舱（更像 Orca）
+
+| 产品 | Stars / 许可 | 一句话 | 贴近度 | 何时看它 |
+| --- | --- | --- | --- | --- |
+| [Superset](https://superset.sh)（[superset-sh/superset](https://github.com/superset-sh/superset)） | 12,952；GitHub 未标 SPDX，第三方记 Elastic License 2.0 | 本地 ADE，宣称编排 100+ CLI Agent，worktree + 桌面/CLI/SDK/MCP | 5 | 要 Orca 同类，但更偏「任意 CLI + 可编程控制面」；注意 ELv2 对 SaaS 二次分发不友好 |
+| [Conductor](https://conductor.build) | 闭源；macOS | Mac 上并行 Claude Code / Codex / Cursor，隔离工作区，看进度再 merge | 5 | 只过 Mac、要打磨过的闭源桌面，不在乎开源 |
+| [Helmor](https://helmor.ai)（[dohooo/helmor](https://github.com/dohooo/helmor)） | 1,287；Apache-2.0 | 本地 workbench：每任务独立 worktree，编辑器 + diff + 终端 + PR | 5 | 要 MIT/Apache 的轻量 Orca，能接受社区小 |
+| [Lanes](https://lanes.sh) | 未公开主仓；macOS | 原生 Mac 看板：每张卡一个真 PTY + 自动 worktree | 4 | 只要 Mac、看板工作流，不需要跨平台 |
+| [termic](https://termic.dev)（[simion/termic](https://github.com/simion/termic)） | 204；AGPL-3.0 | 开源 Conductor 替代：真 CLI 进真终端，不用 SDK 中间层 | 4 | 讨厌闭源 Conductor，接受 AGPL 和小社区 |
+| [ADE](https://www.ade-app.dev)（[arul28/ADE](https://github.com/arul28/ADE)） | 86；AGPL-3.0 | macOS + iOS + CLI 同步的 worktree ADE | 4 | 只要苹果生态、要手机批 diff；项目很小 |
+| [damon-ade](https://github.com/per-simmons/damon-ade) | 96；许可未标清 | macOS ADE：Agent 当持久身份（名字/记忆/专属 worktree），不是一次性 chat | 3 | 想养长期 Agent 人格，不只要并行任务 |
+
+### 8.2 远程 / 手机遥控（更像 Paseo）
+
+| 产品 | Stars / 许可 | 一句话 | 贴近度 | 何时看它 |
+| --- | --- | --- | --- | --- |
+| [Happy](https://happy.engineering)（[slopus/happy](https://github.com/slopus/happy)） | 23,378；MIT | 手机 + Web 接管本机 Claude Code / Codex，带语音和加密 | 4 | 不要多 Agent 编排，只要出门接管已有 session |
+| [Agent of Empires](http://www.agent-of-empires.com/)（[agent-of-empires/agent-of-empires](https://github.com/agent-of-empires/agent-of-empires)） | 3,087；MIT | TUI + Web，方便手机看；支持 Claude Code / OpenCode / Codex / Gemini / Pi / Copilot / Droid 等 | 4 | 要终端原教旨 + 浏览器/手机盯盘，Docker 沙箱叙事 |
+
+Happy 不是 ADE。它更轻：本机 Agent 继续跑，手机当遥控器。Paseo 是 daemon 编排层；Happy 是 session 客户端。
+
+### 8.3 终端 TUI 编排（Orca 的终端亲戚）
+
+| 产品 | Stars / 许可 | 一句话 | 贴近度 | 何时看它 |
+| --- | --- | --- | --- | --- |
+| [Claude Squad](https://smtg-ai.github.io/claude-squad/)（[smtg-ai/claude-squad](https://github.com/smtg-ai/claude-squad)） | 8,325；AGPL-3.0 | tmux 风格 TUI，并排管 Claude Code / Codex / OpenCode / Amp | 4 | 已活在终端，不想再开桌面 ADE |
+| [Agent Deck](https://github.com/asheshgoplani/agent-deck) | 731；MIT | 一个 TUI 管 Claude / Gemini / OpenCode / Codex 等 session | 3 | 要 session 管理器，不要完整 IDE |
+
+### 8.4 看板 / 工单队友（更像 Codeg 的「任务总线」边）
+
+| 产品 | Stars / 许可 | 一句话 | 贴近度 | 何时看它 |
+| --- | --- | --- | --- | --- |
+| [Multica](https://multica.ai)（[multica-ai/multica](https://github.com/multica-ai/multica)） | 46,182；Apache-2.0 + 附加条件 | 把 issue 派给 Claude Code / Codex / Cursor 等当队友，可自托管 | 4 | 工作流从看板/工单出发，不是从 IDE 出发 |
+| [Vibe Kanban](https://www.vibekanban.com/)（[BloopAI/vibe-kanban](https://github.com/BloopAI/vibe-kanban)） | 27,819；Apache-2.0 | 给任意编码 Agent 的 Kanban：规划、跑、审 diff、开 PR | 4 | 要可视化任务板，Agent 只是执行器 |
+| [Gas Town](https://github.com/gastownhall/gastown) | 17,633；MIT | 多 Agent 工作区管理器，git 背书的工作状态和交接 | 3 | 要持久工作状态/交接，不要漂亮 ADE |
+
+这三家 star 都高于 Paseo / Codeg。热度高不等于 ADE 完成度高；它们赢在「任务对象」而不是「编辑器对象」。
+
+### 8.5 Cowork 桌面（更像 AionUi）
+
+| 产品 | Stars / 许可 | 一句话 | 贴近度 | 何时看它 |
+| --- | --- | --- | --- | --- |
+| [OpenWork](https://openworklabs.com)（[different-ai/openwork](https://github.com/different-ai/openwork)） | 22,407；主体 MIT，`/ee` 为 Fair Source | 开源 Claude Cowork 替代，执行层走 OpenCode | 5 | 要 Cowork，且已经（或愿意）用 OpenCode |
+| [Eigent](https://www.eigent.ai)（[eigent-ai/eigent](https://github.com/eigent-ai/eigent)） | 15,016；Apache-2.0 | 开源 Cowork 桌面，对标 Claude Cowork / Codex | 5 | 要团队调度型 Cowork，不一定绑死某一家 CLI |
+
+AionUi 相对这两家的差异：中文 IM 通道、内置办公助手、自动检测一长串 CLI。OpenWork 绑 OpenCode 更深。Eigent 更偏多智能体调度。
+
+### 8.6 单引擎可视化层（不是多 harness）
+
+| 产品 | Stars / 许可 | 一句话 | 贴近度 | 何时看它 |
+| --- | --- | --- | --- | --- |
+| [OpenChamber](https://openchamber.dev/)（[openchamber/openchamber](https://github.com/openchamber/openchamber)） | 8,840；MIT | OpenCode 的桌面/Web/PWA/VS Code 壳：并行多模型、worktree、可视化 diff | 3 | 主引擎已经是 OpenCode；要换 Claude Code 就别来 |
+| OpenCode Desktop（官方，引擎仓 [anomalyco/opencode](https://github.com/anomalyco/opencode) 198,047；MIT） | — | 官方桌面是 TUI 的窗口版 | 2 | 只要官方壳，不要第三方编排 |
+| Claude Desktop / Cowork、Codex App | 闭源；要官方订阅 | 厂商自己的桌面 | 2 | 只跑一家、要官方 Remote |
+
+OpenChamber 明确不兼容 Claude Code。它和 Orca / Paseo 不是可互换备选。
+
+### 8.7 明确排除（常被目录站混进来）
+
+| 名字 | 为什么不是同层 |
+| --- | --- |
+| OpenClaw、Hermes Agent | Agent **运行时本身**，不是套在 CLI 上的控制面 |
+| CrewAI、Dify、Flowise、Mastra、Agno | 框架 / 可视化工作流，自己造 Agent，不编排你本机的 Claude Code |
+| Paperclip | 「AI 公司 OS」，业务职能编排 |
+| oh-my-codex | 单家 Codex 的技能/工作流增强，不是多 Agent 控制面 |
+| Cursor / Windsurf | AI IDE，模型编进编辑器，不是 BYO CLI 编排层 |
+
+### 8.8 四家不合手时怎么跳
+
+```
+只要 Mac、闭源打磨     → Conductor
+要开源 ADE、任意 CLI   → Superset；嫌许可严 → Helmor
+只要终端               → Claude Squad；再轻 → Agent Deck
+只要手机接管 session   → Happy；要 TUI+Web → Agent of Empires
+从工单/看板派活        → Multica 或 Vibe Kanban
+Cowork 且用 OpenCode   → OpenWork
+Cowork 且要开源调度    → Eigent
+已经 All-in OpenCode   → OpenChamber（不要指望它管 Claude Code）
+```
+
+没有第五家同时在「跨平台 ADE + 原生手机同权 + 会话聚合委托 + 办公 Cowork」四条边上压过原来四家。后来者都是单边加强。
+
+## 9. 不该信的说法
 
 - 「Paseo 支持 39 个 Agent」：第三方指南有这个数字；[paseo.sh FAQ](https://paseo.sh) 和架构图只保证 Claude Code / Codex / Cursor / Copilot / OpenCode / Pi。本报告用官方口径。
 - 「Orca 免费所以数据更安全」：编排层确实不经 Orca 云，但打包版默认有 PostHog 产品遥测；底层 Agent 仍把代码发给 Anthropic / OpenAI 等。
 - 「AionUi 能替代 Claude Code」：不能。它是壳 + 内置通用 Agent + 办公技能。硬编码质量仍看你挂的那个 CLI。
 - 「Stars 高 = 更好用」：Orca / AionUi 热，Paseo 专，Codeg 小。热度维已经单独打分，不应再渗进其它维。
+- 「目录站上和 Orca 列在一起的都是同类型」：OpenClaw / CrewAI / Dify 不是。见 8.7。
 
-## 9. 怎么选（可执行）
+## 10. 怎么选（可执行）
 
 已经在用 Claude Code + Codex，桌面为主，要并行对比结果：装 **Orca**。第一件事：Settings → Privacy 关掉遥测，或设 `ORCA_TELEMETRY_DISABLED=1`。
 
@@ -319,7 +412,9 @@ Codeg 在三角形内部：三边都不占顶点，但没有明显短板。适�
 
 可以叠：Paseo 或 Orca 管编码 Agent，AionUi 管办公。Codeg 和 AionUi 办公能力重叠，一般不同时当主工作台。
 
-## 10. 来源
+四家都不合适时，先看第 8 节图谱，不要直接跳到 CrewAI / Dify。
+
+## 11. 来源
 
 ### 一手
 
@@ -344,13 +439,32 @@ Codeg 在三角形内部：三边都不占顶点，但没有明显短板。适�
 - https://github.com/iOfficeAI/AionUi/pull/2425
 - https://github.com/iOfficeAI/AionUi/pull/2426
 - https://github.com/iOfficeAI/AionUi/pull/2429
+- 同类型目录：https://openorchestrators.org/
+- CodePick 控制面对照（2026-08-12）：https://codepick.dev/en/guides/paseo-remote-agent-orchestrator/
+- Superset：https://github.com/superset-sh/superset
+- Conductor：https://conductor.build
+- Helmor：https://github.com/dohooo/helmor
+- Happy：https://github.com/slopus/happy
+- Claude Squad：https://github.com/smtg-ai/claude-squad
+- Agent of Empires：https://github.com/agent-of-empires/agent-of-empires
+- Multica：https://github.com/multica-ai/multica
+- Vibe Kanban：https://github.com/BloopAI/vibe-kanban
+- Gas Town：https://github.com/gastownhall/gastown
+- OpenWork：https://github.com/different-ai/openwork
+- Eigent：https://github.com/eigent-ai/eigent
+- OpenChamber：https://github.com/openchamber/openchamber
+- Lanes：https://lanes.sh
+- ADE（arul28）：https://github.com/arul28/ADE
 
-## 11. 缺口
+## 12. 缺口
 
 - 未做四家同题实操（同一仓库、同一 prompt、同一组 Agent）
 - 未测内存、CPU、长时间并行的量化数据
 - 未审各家权限模型的威胁模型细节（SSH、relay、IM bot token）
 - GitHub `open_issues` 未拆 issue / PR
 - Paseo「39 Agent」与官方名单冲突，已标，未再穷尽源码里的 provider 目录
+- 第 8 节同类型平台只做定位与 GitHub 元数据，未逐家打 10 维分，也未实装
+- Superset 许可以第三方 ELv2 记录为准，GitHub SPDX 为 NOASSERTION，未读完整 LICENSE 正文
+- Lanes 无公开主仓，仅据官网
 
 若要补实操分，下一步应固定：同一 repo、同一三连 prompt（修 bug / 加功能 / 写文档）、同一对 Claude Code + Codex，记录隔离、冲突、远程跟进、diff 回传四件事。
