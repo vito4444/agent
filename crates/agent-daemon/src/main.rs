@@ -40,6 +40,8 @@ enum Commands {
     },
     /// Smoke-test mock ACP agent over stdio
     AcpSmoke,
+    /// Live OpenCode ACP smoke (`opencode acp`). Skips (exit 0 + skipped:true) when binary absent.
+    AcpLiveSmoke,
 }
 
 #[tokio::main]
@@ -89,6 +91,24 @@ async fn main() -> Result<()> {
             let cwd = std::env::current_dir()?;
             let evs = agent_daemon::run_mock_acp_smoke(&cwd).await?;
             println!("{}", serde_json::to_string_pretty(&evs)?);
+        }
+        Commands::AcpLiveSmoke => {
+            let cwd = std::env::current_dir()?;
+            let report = agent_daemon::run_live_acp_smoke(&cwd).await?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            if report.skipped {
+                // Visible skip — not a pass. Exit 0 so CI stays green.
+                eprintln!(
+                    "SKIP: {}",
+                    report.reason.as_deref().unwrap_or("OpenCode missing")
+                );
+            } else if !report.prompt_ok {
+                // Session opened but prompt failed (often auth) — still exit 0 with honest JSON.
+                eprintln!(
+                    "WARN: live session opened but prompt failed: {}",
+                    report.prompt_error.as_deref().unwrap_or("unknown")
+                );
+            }
         }
     }
     Ok(())

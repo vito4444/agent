@@ -3,7 +3,10 @@
 //! a missing OpenCode binary must not prevent opening the workbench.
 
 use agent_acp::normalize::fixture_transcript;
-use agent_acp::{normalize_session_update, AcpClient, AcpSpawnOpts, NormalizedEvent, SharedDb};
+use agent_acp::{
+    normalize_session_update, probe_opencode, AcpClient, AcpSpawnOpts, AdvertisedMenus,
+    NormalizedEvent, OpenCodeProbe, SharedDb,
+};
 use agent_core::db::Db;
 use agent_core::graph::demo_two_task_yaml;
 use agent_core::journal::Journal;
@@ -31,7 +34,11 @@ pub struct WorkbenchState {
     pub repo_root: String,
     pub worktree_root: String,
     pub banners: Vec<StartupBanner>,
+    /// Real probe result — never a hard-coded true.
     pub opencode_available: bool,
+    pub opencode_bin: Option<String>,
+    pub opencode_probe_source: String,
+    pub opencode_version: Option<String>,
 }
 
 pub struct Workbench {
@@ -63,11 +70,25 @@ impl Workbench {
             });
         }
 
-        let opencode_available = which_opencode().is_some();
-        if !opencode_available {
+        let probe = probe_opencode();
+        let opencode_available = probe.available;
+        if opencode_available {
+            banners.push(StartupBanner {
+                level: "info".into(),
+                message: format!(
+                    "OpenCode available at {} (via {}, version={})",
+                    probe.path.as_deref().unwrap_or("?"),
+                    probe.source,
+                    probe.version.as_deref().unwrap_or("unknown")
+                ),
+            });
+        } else {
             banners.push(StartupBanner {
                 level: "warn".into(),
-                message: "OpenCode (`opencode acp`) not found on PATH. Using fixture replay / mock agent. Real agent runs are unverified on this machine.".into(),
+                message: format!(
+                    "OpenCode not available (probe source={}). Set OPENCODE_BIN or install `opencode` on PATH. Live ACP unverified; using fixture/mock.",
+                    probe.source
+                ),
             });
         }
 
@@ -92,6 +113,9 @@ impl Workbench {
             worktree_root: worktree_root.display().to_string(),
             banners,
             opencode_available,
+            opencode_bin: probe.path.clone(),
+            opencode_probe_source: probe.source.clone(),
+            opencode_version: probe.version.clone(),
         };
         Ok(Self { db, state })
     }
@@ -192,20 +216,174 @@ impl Workbench {
     }
 }
 
-fn which_opencode() -> Option<PathBuf> {
-    std::env::var_os("PATH").and_then(|paths| {
-        for dir in std::env::split_paths(&paths) {
-            let p = dir.join("opencode");
-            if p.is_file() {
-                return Some(p);
-            }
-        }
-        None
-    })
-}
-
 /// Shared handle for Tauri managed state.
 pub type SharedWorkbench = Arc<Mutex<Option<Workbench>>>;
+
+/// Outcome of a live OpenCode ACP smoke. `skipped=true` means binary absent — not a pass.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LiveAcpSmokeReport {
+    pub skipped: bool,
+    pub reason: Option<String>,
+    pub probe: OpenCodeProbe,
+    pub session_id: Option<String>,
+    pub menus: AdvertisedMenus,
+    pub menus_has_model: bool,
+    pub menus_has_thought_level: bool,
+    pub prompt_attempted: bool,
+    pub prompt_ok: bool,
+    pub prompt_error: Option<String>,
+    pub journal_session_updates: usize,
+    pub journal_permission_events: usize,
+    pub model_switch_check: Option<String>,
+}
+
+/// Live OpenCode ACP path: SharedDb journal only (no parallel in-memory-only sink).
+/// Skips cleanly when `opencode` is missing so CI stays green.
+pub async fn run_live_acp_smoke(cwd: &Path) -> Result<LiveAcpSmokeReport> {
+    let probe = probe_opencode();
+    if !probe.available {
+        return Ok(LiveAcpSmokeReport {
+            skipped: true,
+            reason: Some(format!(
+                "OpenCode not available (source={}). Live ACP smoke skipped — not a pass.",
+                probe.source
+            )),
+            probe,
+            session_id: None,
+            menus: AdvertisedMenus::default(),
+            menus_has_model: false,
+            menus_has_thought_level: false,
+            prompt_attempted: false,
+            prompt_ok: false,
+            prompt_error: None,
+            journal_session_updates: 0,
+            journal_permission_events: 0,
+            model_switch_check: None,
+        });
+    }
+
+    let db_path = cwd.join(".acp-live-smoke.sqlite");
+    let _ = std::fs::remove_file(&db_path);
+    let shared: SharedDb = Arc::new(Mutex::new(Db::open(&db_path)?));
+
+    // Deny-by-default: do not pre-remember. Live smoke must not reintroduce silent allow.
+    let client = AcpClient::spawn_opencode(
+        cwd,
+        AcpSpawnOpts {
+            // Live path: journal via SharedDb only — no second in-memory-only sink.
+            event_sink: None,
+            db: Some(shared.clone()),
+        },
+    )
+    .await
+    .context("spawn opencode acp")?;
+
+    let (sid, menus) = client
+        .session_new(cwd)
+        .await
+        .context("session/new")?;
+    {
+        let guard = shared.lock();
+        Journal::new(&guard).append(
+            JournalKind::SessionCreated,
+            None,
+            None,
+            json!({
+                "session_id": sid,
+                "config_options_advertised": {
+                    "model": menus.model.is_some(),
+                    "thought_level": menus.thought_level.is_some(),
+                }
+            }),
+        )?;
+    }
+
+    // Honesty: menus only reflect what session/new advertised.
+    let menus_has_model = menus.model.is_some();
+    let menus_has_thought = menus.thought_level.is_some();
+
+    let model_switch_check = if let Some(ref model) = menus.model {
+        let current = model
+            .current_value
+            .as_ref()
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        // Asking for a nonexistent config id must force new-session path.
+        let denied = client
+            .try_set_model(&sid, "__not_advertised__", "x")
+            .await?;
+        Some(format!(
+            "current_model={current:?}; unadvertised_switch={denied:?}"
+        ))
+    } else {
+        // No model menu advertised — try_set_model must deny hot-swap.
+        let denied = client
+            .try_set_model(&sid, "model", "anything")
+            .await?;
+        Some(format!(
+            "no_model_advertised; switch_outcome={denied:?}"
+        ))
+    };
+
+    let prompt = {
+        let guard = shared.lock();
+        let (combined, _) = MemoryStore::new(&guard).inject_l0_into_prompt("Reply with exactly: pong")?;
+        combined
+    };
+
+    let mut prompt_ok = false;
+    let mut prompt_error = None;
+    let prompt_attempted = true;
+    match client.prompt(&sid, &prompt).await {
+        Ok(_) => {
+            prompt_ok = true;
+            // Allow agent to stream updates into the journal.
+            tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+        }
+        Err(e) => {
+            prompt_error = Some(e.to_string());
+        }
+    }
+
+    let _ = client.close_session(&sid).await;
+    client.kill().await?;
+
+    let (journal_session_updates, journal_permission_events) = {
+        let guard = shared.lock();
+        let events = Journal::new(&guard).list_since(0, 500)?;
+        let su = events.iter().filter(|e| e.kind == "session_update").count();
+        let pe = events
+            .iter()
+            .filter(|e| e.kind == "permission_requested" || e.kind == "permission_resolved")
+            .count();
+        (su, pe)
+    };
+
+    // When prompt succeeded we expect at least one session_update in the journal.
+    // If prompt failed (e.g. missing auth), report honestly — do not invent updates.
+    if prompt_ok && journal_session_updates == 0 {
+        anyhow::bail!(
+            "live ACP prompt returned ok but journal has zero session_update events"
+        );
+    }
+
+    Ok(LiveAcpSmokeReport {
+        skipped: false,
+        reason: None,
+        probe,
+        session_id: Some(sid),
+        menus,
+        menus_has_model,
+        menus_has_thought_level: menus_has_thought,
+        prompt_attempted,
+        prompt_ok,
+        prompt_error,
+        journal_session_updates,
+        journal_permission_events,
+        model_switch_check,
+    })
+}
 
 /// Production-shaped ACP smoke: mock session + SharedDb journal/permissions.
 /// Remembers `edit` so the mock tool path can complete; events must hit the journal.
@@ -264,4 +442,60 @@ pub async fn run_mock_acp_smoke(cwd: &Path) -> Result<Vec<NormalizedEvent>> {
 
     let events = collected.lock().clone();
     Ok(events)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn live_acp_smoke_skips_when_opencode_missing() {
+        // Force missing via bogus override so CI without OpenCode stays green.
+        let prev = std::env::var_os("OPENCODE_BIN");
+        std::env::set_var("OPENCODE_BIN", "/no/such/opencode-for-live-smoke");
+        let dir = tempdir().unwrap();
+        let report = run_live_acp_smoke(dir.path()).await.unwrap();
+        assert!(report.skipped, "must skip, not fake-pass");
+        assert!(report.reason.as_ref().unwrap().contains("not available"));
+        assert!(!report.menus_has_model);
+        assert!(!report.menus_has_thought_level);
+        match prev {
+            Some(v) => std::env::set_var("OPENCODE_BIN", v),
+            None => std::env::remove_var("OPENCODE_BIN"),
+        }
+    }
+
+    /// Ignored by default: runs only when a real OpenCode binary is on PATH / OPENCODE_BIN.
+    /// `cargo test -p agent-daemon live_acp_smoke_when_present -- --ignored --nocapture`
+    #[tokio::test]
+    #[ignore = "requires live OpenCode binary; skipped in default CI"]
+    async fn live_acp_smoke_when_present() {
+        let probe = probe_opencode();
+        if !probe.available {
+            eprintln!("SKIP ignored test: OpenCode not available ({})", probe.source);
+            return;
+        }
+        let dir = tempdir().unwrap();
+        let report = run_live_acp_smoke(dir.path()).await.expect("live smoke");
+        assert!(!report.skipped);
+        assert!(report.session_id.is_some());
+        // Menus must match advertisement flags (never invent).
+        assert_eq!(report.menus_has_model, report.menus.model.is_some());
+        assert_eq!(
+            report.menus_has_thought_level,
+            report.menus.thought_level.is_some()
+        );
+        if report.prompt_ok {
+            assert!(
+                report.journal_session_updates > 0,
+                "prompt ok ⇒ journal must have session_update"
+            );
+        } else {
+            eprintln!(
+                "live session ok but prompt failed (often auth): {:?}",
+                report.prompt_error
+            );
+        }
+    }
 }

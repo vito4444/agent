@@ -128,7 +128,29 @@ impl AcpClient {
 
     pub async fn spawn_opencode(cwd: &Path, opts: AcpSpawnOpts) -> CoreResult<Self> {
         // Model is NOT passed as `acp --model` — that flag does not exist.
-        Self::spawn("opencode", &["acp"], cwd, vec![], opts).await
+        // Resolve via OPENCODE_BIN / PATH so we never spawn a pretend binary.
+        let probe = crate::probe::probe_opencode();
+        let exe = probe.path_buf().ok_or_else(|| {
+            CoreError::Other(
+                "OpenCode not available (set OPENCODE_BIN or install `opencode` on PATH)"
+                    .into(),
+            )
+        })?;
+        if !probe.available {
+            return Err(CoreError::Other(format!(
+                "OpenCode probe failed (source={}): {}",
+                probe.source,
+                probe.path.unwrap_or_default()
+            )));
+        }
+        Self::spawn(
+            exe.to_str().unwrap_or("opencode"),
+            &["acp"],
+            cwd,
+            vec![],
+            opts,
+        )
+        .await
     }
 
     async fn initialize(&self) -> CoreResult<()> {

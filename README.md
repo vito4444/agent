@@ -53,6 +53,13 @@ cargo run -p agent-daemon -- \
 # 4) ACP mock 契约冒烟
 cargo run -p agent-daemon -- acp-smoke
 
+# 4b) Live OpenCode ACP（无二进制则 skipped:true，不算通过）
+# 可选：export OPENCODE_BIN=/path/to/opencode
+cargo run -p agent-daemon -- status          # banners 显示 available vs missing
+cargo run -p agent-daemon -- acp-live-smoke  # 真 `opencode acp`；缺则 skip
+# 有本机 OpenCode 时也可：
+# cargo test -p agent-daemon live_acp_smoke_when_present -- --ignored --nocapture
+
 # 5) 记忆演示：L0/L1/提案
 cargo run -p agent-daemon -- --data-dir .agent-workbench seed-memory
 # 按输出里的 id：
@@ -112,18 +119,18 @@ cargo build --manifest-path src-tauri/Cargo.toml
 | L0 只读规则逐字注入 + 审计事件 | 单测 `l0_injected_verbatim_auditable` |
 | L1 invalidate 后行仍在 | 单测 + CLI |
 | 假提案 Inbox，批准后进 `l2_bullets` | 单测 + CLI |
-| 真 OpenCode 端到端 | **未验证**（本机无 `opencode`） |
+| 真 OpenCode 端到端 | **本机可跑时**：`acp-live-smoke`（探测 `OPENCODE_BIN`/PATH）。CI 无二进制则 skip，不算通过。 |
 | Tauri 桌面窗口 | **未验证**（缺 webkit/gtk） |
 
 ---
 
 ## 已知未验证 / 缺口
 
-- 真实 `opencode acp` 进程的 initialize/session/configOptions 探测（仅 mock 测过）
 - Tauri 窗口实测、系统 tray、原生菜单
 - Merge 在复杂 git 冲突下的策略（V0 有 fallback copy，已 journal 标记 `mode`）
 - 进程池热复用的长期泄漏/回收
-- 权限「记住」跨重启的 UI 完整流（DB 表与 `op_type` 键已有，端到端 UI 未接真 ACP）
+- 权限「记住」跨重启的完整 UI 流（DB + deny-by-default 已有；交互式 allow_once→retry 未接）
+- Live OpenCode：在装有 `opencode` 的环境用 `acp-live-smoke` 验证；无二进制时必须 `skipped: true`，禁止当绿
 
 ---
 

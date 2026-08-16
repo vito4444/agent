@@ -21,6 +21,8 @@ jobs:
             run-mock --yaml fixtures/demo-project/graph.yaml
       - name: ACP mock smoke
         run: cargo run -p agent-daemon -- acp-smoke
+      - name: Live OpenCode smoke (skip if missing)
+        run: cargo run -p agent-daemon -- acp-live-smoke
 
   frontend:
     runs-on: ubuntu-latest

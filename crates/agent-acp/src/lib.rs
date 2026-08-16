@@ -6,9 +6,11 @@
 pub mod client;
 pub mod normalize;
 pub mod pool;
+pub mod probe;
 pub mod types;
 
 pub use client::{AcpClient, AcpSpawnOpts, EventSink, SharedDb};
 pub use normalize::{normalize_session_update, NormalizedEvent};
 pub use pool::{ProcessPool, ProcessPoolKey};
+pub use probe::{probe_opencode, OpenCodeProbe};
 pub use types::*;
