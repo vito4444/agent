@@ -1,0 +1,28 @@
+[package]
+name = "agent-daemon"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Workbench daemon: wires journal, scheduler, ACP, memory"
+
+[[bin]]
+name = "agent-daemon"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+clap = { version = "4", features = ["derive"] }
+agent-core.workspace = true
+agent-acp.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+tempfile.workspace = true
+parking_lot.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

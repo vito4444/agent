@@ -1,0 +1,27 @@
+name: fix-and-test
+tasks:
+  - id: A
+    title: Fix add function
+    prompt: |
+      Fix src/lib.rs so add(2,2) returns 4 (use a+b).
+      Produce the fixed file as artifact fixed_lib.
+    gate_command: "cargo test --manifest-path Cargo.toml add_works"
+    produces:
+      - id: fixed_lib
+        path: src/lib.rs
+        description: Fixed library source
+  - id: B
+    title: Write more tests
+    prompt: |
+      Add tests/extra.rs covering add(0,0) and add(-1,1).
+      Upstream fixed_lib must already be present in this worktree.
+    gate_command: "test -f tests/extra.rs && cargo test --manifest-path Cargo.toml"
+    produces:
+      - id: extra_tests
+        path: tests/extra.rs
+deps:
+  - from: A
+    to: B
+    artifacts:
+      - id: fixed_lib
+        path: src/lib.rs

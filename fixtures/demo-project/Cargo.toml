@@ -1,0 +1,12 @@
+[package]
+name = "demo_fix"
+version = "0.1.0"
+edition = "2021"
+description = "V0 demo fixture: broken add() + failing test for the two-task graph"
+
+[lib]
+path = "src/lib.rs"
+
+[[test]]
+name = "add_works"
+path = "tests/add_works.rs"
